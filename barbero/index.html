@@ -4,38 +4,45 @@
     <meta charset="UTF-8">
     <script src="https://cdn.tailwindcss.com"></script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel de Control - Barbería</title>
+    <title>Panel Barbero - Barbería Lyon Barber</title>
+    <style>
+        body { background-color: #0f172a; } /* Color del panel principal */
+    </style>
 </head>
-<body class="bg-gray-100 min-h-screen font-sans text-gray-900">
-    <header class="bg-white shadow p-4 sticky top-0 z-10">
-        <div class="max-w-2xl mx-auto flex justify-between items-center px-2">
-            <div class="flex items-center gap-3">
-                <a href="../index.html" class="bg-gray-100 p-2 rounded-lg hover:bg-gray-200 transition">
-                    ⬅️
-                </a>
-                <div>
-                    <h1 class="font-bold text-lg leading-none">Admin Barber</h1>
-                    <span class="text-xs text-yellow-600 font-bold uppercase tracking-wider">Panel Interno</span>
-                </div>
+<body class="text-white min-h-screen font-sans">
+    <header class="p-6 flex justify-between items-center max-w-2xl mx-auto border-b border-slate-800">
+        <div class="flex items-center gap-3">
+            <a href="../index.html" class="bg-slate-800 p-2 rounded-xl hover:bg-slate-700 transition">⬅️</a>
+            <div>
+                <h1 class="font-bold text-xl italic text-yellow-500">ADMIN BARBER</h1>
+                <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Gestión Interna</p>
             </div>
-            <input type="date" id="filtroFecha" class="border-2 border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none cursor-pointer text-sm font-bold">
         </div>
+        <input type="date" id="filtroFecha" class="bg-slate-800 border border-slate-700 p-2 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-yellow-500">
     </header>
 
     <main class="p-6 max-w-2xl mx-auto">
-        <div class="flex justify-between items-center mb-6">
-            <h2 class="text-gray-500 font-bold uppercase text-xs tracking-widest">Turnos del día</h2>
-            <span id="contadorTurnos" class="bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full">0 Turnos</span>
+        
+        <div class="bg-slate-800 border border-slate-700 rounded-3xl p-5 mb-8 shadow-xl">
+            <h3 class="text-yellow-500 font-bold text-sm uppercase mb-4 flex items-center gap-2">
+                🚫 Bloquear Agenda (Día Seleccionado)
+            </h3>
+            <div id="gridBloqueo" class="grid grid-cols-4 gap-2">
+                </div>
         </div>
 
-        <div id="listaTurnos" class="space-y-4">
-            <p class='text-center text-gray-500 mt-10 italic'>Cargando turnos...</p>
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-gray-400 font-bold uppercase text-xs tracking-widest italic">Turnos de Clientes</h2>
+            <span id="contadorTurnos" class="bg-yellow-500 text-black text-xs font-black px-3 py-1 rounded-full shadow-lg">0 TURNOS</span>
         </div>
+
+        <div id="listaTurnos" class="space-y-3">
+            </div>
     </main>
 
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
         const firebaseConfig = {
           apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
@@ -52,76 +59,96 @@
 
         const filtroFecha = document.getElementById('filtroFecha');
         const listaTurnos = document.getElementById('listaTurnos');
+        const gridBloqueo = document.getElementById('gridBloqueo');
         const contadorTurnos = document.getElementById('contadorTurnos');
 
+        // Horarios fijos de 10 a 20 hs
+        const horariosBase = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
+
         // Fecha de hoy por defecto
-        const hoy = new Date();
-        const yyyy = hoy.getFullYear();
-        const mm = String(hoy.getMonth() + 1).padStart(2, '0');
-        const dd = String(hoy.getDate()).padStart(2, '0');
-        filtroFecha.value = `${yyyy}-${mm}-${dd}`;
+        const hoy = new Date().toISOString().split('T')[0];
+        filtroFecha.value = hoy;
 
         let unsubscribe = null;
 
-        function escucharTurnos() {
+        function escucharAgenda() {
             if (unsubscribe) unsubscribe();
 
             const q = query(collection(db, "turnos"), where("fecha", "==", filtroFecha.value));
             
             unsubscribe = onSnapshot(q, (snapshot) => {
                 listaTurnos.innerHTML = "";
-                contadorTurnos.innerText = `${snapshot.size} Turnos`;
-                
-                if (snapshot.empty) {
-                    listaTurnos.innerHTML = `
-                        <div class="text-center py-20">
-                            <p class="text-4xl mb-4">☕</p>
-                            <p class="text-gray-400 font-medium">No hay turnos para esta fecha.</p>
-                        </div>`;
-                    return;
+                const ocupados = [];
+                const turnosClientes = [];
+
+                snapshot.forEach((d) => {
+                    const data = d.data();
+                    ocupados.push(data.hora);
+                    if (data.cliente !== "BLOQUEADO") {
+                        turnosClientes.push({ id: d.id, ...data });
+                    }
+                });
+
+                // 1. Dibujar botones de bloqueo
+                gridBloqueo.innerHTML = "";
+                horariosBase.forEach(hora => {
+                    const estaBloqueado = ocupados.includes(hora);
+                    const btn = document.createElement('button');
+                    btn.innerText = hora;
+                    btn.className = estaBloqueado 
+                        ? "py-2 bg-red-500/20 border border-red-500/50 text-red-500 rounded-xl text-xs font-bold transition"
+                        : "py-2 bg-slate-700 border border-slate-600 text-gray-300 rounded-xl text-xs font-bold hover:bg-slate-600 transition";
+                    
+                    btn.onclick = () => togglerBloqueo(hora, estaBloqueado, snapshot);
+                    gridBloqueo.appendChild(btn);
+                });
+
+                // 2. Dibujar lista de clientes
+                contadorTurnos.innerText = `${turnosClientes.length} TURNOS`;
+                if (turnosClientes.length === 0) {
+                    listaTurnos.innerHTML = `<p class="text-center py-10 text-gray-500 italic text-sm">Sin turnos de clientes para hoy</p>`;
+                } else {
+                    turnosClientes.sort((a,b) => a.hora.localeCompare(b.hora)).forEach(t => {
+                        const card = document.createElement('div');
+                        card.className = "bg-slate-800 border border-slate-700 p-4 rounded-2xl flex justify-between items-center shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300";
+                        card.innerHTML = `
+                            <div class="flex items-center gap-4">
+                                <span class="bg-yellow-500 text-black font-black px-2 py-1 rounded-lg text-xs">${t.hora}</span>
+                                <p class="font-bold text-gray-200 capitalize">${t.cliente}</p>
+                            </div>
+                            <button onclick="borrarRegistro('${t.id}')" class="text-red-400 hover:bg-red-500/10 p-2 rounded-xl transition">🗑️</button>
+                        `;
+                        listaTurnos.appendChild(card);
+                    });
                 }
-
-                const turnosArray = [];
-                snapshot.forEach((turnoDoc) => {
-                    turnosArray.push({ id: turnoDoc.id, ...turnoDoc.data() });
-                });
-
-                turnosArray.sort((a, b) => a.hora.localeCompare(b.hora));
-
-                turnosArray.forEach((t) => {
-                    const div = document.createElement('div');
-                    div.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center animate-in fade-in duration-500";
-                    div.innerHTML = `
-                        <div class="flex items-center gap-4">
-                            <div class="bg-yellow-100 text-yellow-700 font-black px-3 py-1 rounded-lg text-sm">
-                                ${t.hora}
-                            </div>
-                            <div>
-                                <p class="font-bold text-gray-800 text-lg capitalize">${t.cliente}</p>
-                                <p class="text-xs text-gray-400 uppercase">Confirmado</p>
-                            </div>
-                        </div>
-                        <button onclick="window.cancelarTurno('${t.id}')" class="p-2 hover:bg-red-50 rounded-full transition group">
-                            <span class="text-red-300 group-hover:text-red-500 text-xl">🗑️</span>
-                        </button>
-                    `;
-                    listaTurnos.appendChild(div);
-                });
             });
         }
 
-        window.cancelarTurno = async (id) => {
-            if(confirm("¿Deseas eliminar este turno?")) {
-                try {
-                    await deleteDoc(doc(db, "turnos", id));
-                } catch(error) {
-                    alert("Error al borrar.");
-                }
+        async function togglerBloqueo(hora, estaBloqueado, snapshot) {
+            if (estaBloqueado) {
+                // Si está bloqueado, buscamos el ID para borrarlo
+                let idParaBorrar = "";
+                snapshot.forEach(d => { if(d.data().hora === hora) idParaBorrar = d.id; });
+                if (idParaBorrar) await deleteDoc(doc(db, "turnos", idParaBorrar));
+            } else {
+                // Bloquear horario
+                await addDoc(collection(db, "turnos"), {
+                    cliente: "BLOQUEADO",
+                    fecha: filtroFecha.value,
+                    hora: hora,
+                    estado: "bloqueado"
+                });
             }
         }
 
-        filtroFecha.addEventListener('change', escucharTurnos);
-        escucharTurnos();
+        window.borrarRegistro = async (id) => {
+            if(confirm("¿Eliminar este turno definitivamente?")) {
+                await deleteDoc(doc(db, "turnos", id));
+            }
+        }
+
+        filtroFecha.addEventListener('change', escucharAgenda);
+        escucharAgenda();
     </script>
 </body>
 </html>
