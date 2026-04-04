@@ -1,0 +1,118 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Barbería</title>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans">
+    <header class="bg-white shadow p-4 flex justify-between items-center px-6 mb-6">
+        <div class="flex items-center gap-3">
+            <div class="w-10 h-10 bg-yellow-500 rounded-full flex items-center justify-center text-black font-bold">LB</div>
+            <h1 class="font-bold text-xl">Admin Barber</h1>
+        </div>
+        <input type="date" id="filtroFecha" class="border-2 border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none cursor-pointer">
+    </header>
+
+    <main class="p-6 max-w-2xl mx-auto">
+        <h2 class="text-gray-500 font-bold mb-4 uppercase text-sm">Turnos del día seleccionado</h2>
+        <div id="listaTurnos" class="space-y-4">
+            <p class='text-center text-gray-500 mt-10'>Cargando turnos...</p>
+        </div>
+    </main>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // TUS CREDENCIALES INTEGRADAS
+        const firebaseConfig = {
+          apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
+          authDomain: "barberia-4b1f9.firebaseapp.com",
+          projectId: "barberia-4b1f9",
+          storageBucket: "barberia-4b1f9.firebasestorage.app",
+          messagingSenderId: "1062067345937",
+          appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
+          measurementId: "G-XTF1P4LKV8"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const filtroFecha = document.getElementById('filtroFecha');
+        const listaTurnos = document.getElementById('listaTurnos');
+
+        // Poner la fecha de hoy por defecto (Ajustado para evitar problemas de zona horaria)
+        const hoy = new Date();
+        const yyyy = hoy.getFullYear();
+        const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+        const dd = String(hoy.getDate()).padStart(2, '0');
+        filtroFecha.value = `${yyyy}-${mm}-${dd}`;
+
+        // Variable para guardar el "escuchador" de la base de datos
+        let unsubscribe = null;
+
+        // Escuchar cambios en la base de datos
+        function escucharTurnos() {
+            // Si ya estábamos escuchando otra fecha, cancelamos la anterior para no mezclar datos
+            if (unsubscribe) {
+                unsubscribe();
+            }
+
+            const q = query(collection(db, "turnos"), where("fecha", "==", filtroFecha.value));
+            
+            // onSnapshot se queda "escuchando" en tiempo real
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                listaTurnos.innerHTML = "";
+                
+                if (snapshot.empty) {
+                    listaTurnos.innerHTML = "<p class='text-center text-gray-500 mt-10'>No hay turnos agendados para este día.</p>";
+                    return;
+                }
+
+                // Convertir a array para poder ordenar por horario
+                const turnosArray = [];
+                snapshot.forEach((turnoDoc) => {
+                    turnosArray.push({ id: turnoDoc.id, ...turnoDoc.data() });
+                });
+
+                // Ordenar los turnos desde más temprano a más tarde
+                turnosArray.sort((a, b) => a.hora.localeCompare(b.hora));
+
+                // Dibujar cada turno en la pantalla
+                turnosArray.forEach((t) => {
+                    const div = document.createElement('div');
+                    div.className = "bg-white p-4 rounded-xl shadow-sm border-l-4 border-yellow-500 flex justify-between items-center transition hover:shadow-md";
+                    div.innerHTML = `
+                        <div>
+                            <p class="text-sm font-bold text-gray-500 mb-1">⏰ ${t.hora} hs</p>
+                            <p class="font-bold text-xl text-gray-800">${t.cliente}</p>
+                        </div>
+                        <button onclick="window.cancelarTurno('${t.id}')" class="text-red-500 font-semibold px-4 py-2 bg-red-50 hover:bg-red-100 rounded-lg transition">Cancelar</button>
+                    `;
+                    listaTurnos.appendChild(div);
+                });
+            });
+        }
+
+        // Función para borrar un turno
+        window.cancelarTurno = async (id) => {
+            if(confirm("¿Estás seguro de que querés cancelar y borrar este turno?")) {
+                try {
+                    await deleteDoc(doc(db, "turnos", id));
+                } catch(error) {
+                    alert("Hubo un error al cancelar el turno.");
+                    console.error(error);
+                }
+            }
+        }
+
+        // Cuando el barbero cambie la fecha en el calendario, volvemos a buscar
+        filtroFecha.addEventListener('change', escucharTurnos);
+        
+        // Ejecutar por primera vez al cargar la página
+        escucharTurnos();
+    </script>
+</body>
+</html>
