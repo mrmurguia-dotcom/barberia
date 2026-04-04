@@ -6,7 +6,7 @@
     <title>Reservar Turno - Lyon Barber</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        body { background-color: #0f172a; } /* Coincidir exacto con el Hub */
+        body { background-color: #0f172a; } /* Color exacto del Panel Principal */
     </style>
 </head>
 <body class="text-white min-h-screen font-sans">
@@ -38,7 +38,7 @@
                 <span class="text-gray-300 text-sm font-semibold">Tu Número de Teléfono</span>
                 <input type="tel" id="telefonoCliente" placeholder="Ej: 11 1234 5678" required
                     class="w-full bg-slate-800 border border-slate-700 p-4 rounded-xl mt-1 focus:ring-2 focus:ring-yellow-500 outline-none transition text-gray-100">
-                <span class="text-xs text-gray-500 mt-1 block px-1">Lo usaremos solo para confirmar tu turno.</span>
+                <span class="text-xs text-gray-500 mt-1 block px-1">Para avisarte ante cualquier cambio.</span>
             </label>
         </div>
 
@@ -52,9 +52,9 @@
             </label>
 
             <div class="mt-4">
-                <span class="text-gray-300 text-sm font-semibold block mb-3">Horarios Disponibles (10 a 20 hs)</span>
+                <span class="text-gray-300 text-sm font-semibold block mb-3">Horarios Disponibles</span>
                 <div id="slots" class="grid grid-cols-3 gap-3">
-                    <p class="text-gray-500 text-sm italic col-span-3 text-center py-4">Verificando agenda...</p>
+                    <p class="text-gray-500 text-sm italic col-span-3 text-center py-4">Consultando disponibilidad...</p>
                 </div>
             </div>
         </div>
@@ -71,7 +71,6 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
         import { getFirestore, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-        // TUS CREDENCIALES INTEGRADAS
         const firebaseConfig = {
           apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
           authDomain: "barberia-4b1f9.firebaseapp.com",
@@ -89,7 +88,6 @@
         const inputFecha = document.getElementById('fecha');
         const inputTelefono = document.getElementById('telefonoCliente');
 
-        // HORARIO COMPLETO (Sincronizado con Admin)
         const horariosBase = [
             "10:00", "11:00", "12:00", "13:00", "14:00", 
             "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"
@@ -97,51 +95,72 @@
         
         let horaSeleccionada = "";
 
-        // Fecha de hoy por defecto al iniciar
         const hoy = new Date().toISOString().split('T')[0];
         inputFecha.value = hoy;
 
-        // Actualizar slots si cambia la fecha
         inputFecha.addEventListener('change', cargarDisponibilidad);
 
         async function cargarDisponibilidad() {
-            slotsContainer.innerHTML = "<p class='col-span-3 text-center text-sm text-gray-500 animate-pulse py-4'>Consultando disponibilidad...</p>";
+            slotsContainer.innerHTML = "<p class='col-span-3 text-center text-sm text-gray-500 animate-pulse py-4'>Cargando agenda...</p>";
+            
             const fechaElegida = inputFecha.value;
+            const fechaObj = new Date(fechaElegida + 'T00:00:00');
+            const esDomingo = fechaObj.getDay() === 0; // 0 = Domingo
 
             try {
-                // Consultamos todos los turnos/bloqueos para esa fecha
                 const q = query(collection(db, "turnos"), where("fecha", "==", fechaElegida));
                 const querySnapshot = await getDocs(q);
-                const horasOcupadas = [];
-                querySnapshot.forEach((doc) => horasOcupadas.push(doc.data().hora));
+                
+                const ocupados = [];
+                const habilitadosDomingo = [];
+
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.cliente === "ABIERTO_DOMINGO") {
+                        habilitadosDomingo.push(data.hora);
+                    } else {
+                        ocupados.push(data.hora);
+                    }
+                });
 
                 slotsContainer.innerHTML = "";
                 horariosBase.forEach(hora => {
-                    const estaOcupado = horasOcupadas.includes(hora);
+                    let disponible = false;
+
+                    if (esDomingo) {
+                        // Domingo: Solo si el barbero lo habilitó manualmente Y no hay cliente
+                        disponible = habilitadosDomingo.includes(hora) && !ocupados.includes(hora);
+                    } else {
+                        // Lunes a Sábado: Disponible si no hay cliente ni bloqueo
+                        disponible = !ocupados.includes(hora);
+                    }
+
                     const btn = document.createElement('button');
                     btn.innerText = hora;
                     
-                    if (estaOcupado) {
+                    if (!disponible) {
                         btn.className = "py-3 bg-slate-800 text-slate-600 rounded-xl cursor-not-allowed border border-slate-700 text-sm font-medium";
                         btn.disabled = true;
                     } else {
                         btn.className = "py-3 bg-slate-700 rounded-xl hover:bg-yellow-500/10 hover:border-yellow-500 transition text-sm font-semibold border border-slate-600 text-gray-100";
                         btn.onclick = (e) => {
                             e.preventDefault();
-                            // Desmarcar otros botones
                             document.querySelectorAll('#slots button').forEach(b => {
                                 if(!b.disabled) b.className = "py-3 bg-slate-700 rounded-xl hover:bg-yellow-500/10 hover:border-yellow-500 transition text-sm font-semibold border border-slate-600 text-gray-100";
                             });
-                            // Marcar este botón como seleccionado
                             btn.className = "py-3 bg-yellow-500 text-black font-black rounded-xl text-sm shadow-[0_0_20px_rgba(234,179,8,0.5)] border-2 border-white";
                             horaSeleccionada = hora;
                         };
                     }
                     slotsContainer.appendChild(btn);
                 });
+
+                if (esDomingo && habilitadosDomingo.length === 0) {
+                    slotsContainer.innerHTML = "<p class='col-span-3 text-center text-xs text-red-400 py-4 font-bold'>Día Domingo: Agenda cerrada.</p>";
+                }
+
             } catch (error) {
-                console.error("Error:", error);
-                slotsContainer.innerHTML = "<p class='col-span-3 text-red-400 text-center text-xs bg-red-500/10 p-4 rounded-xl'>⚠️ Error de conexión. Reintentá.</p>";
+                slotsContainer.innerHTML = "<p class='col-span-3 text-red-400 text-center text-xs bg-red-500/10 p-4 rounded-xl'>⚠️ Error de conexión.</p>";
             }
         }
 
@@ -150,38 +169,27 @@
             const nombre = document.getElementById('nombreCliente').value.trim();
             const telefono = inputTelefono.value.trim();
 
-            // Validación de campos obligatorios
             if(!fecha || !horaSeleccionada || !nombre || !telefono) {
-                alert("⚠️ Por favor, completá tu Nombre, Teléfono y elegí un Horario.");
-                return;
-            }
-
-            // Opcional: Validación básica de formato de teléfono (puedes ajustarla)
-            if(telefono.length < 8) {
-                alert("⚠️ Por favor, ingresá un número de teléfono válido.");
+                alert("⚠️ Por favor, completá tu nombre, teléfono y elegí un horario.");
                 return;
             }
 
             try {
-                // Guardamos el registro completo en Firebase
                 await addDoc(collection(db, "turnos"), {
                     cliente: nombre,
-                    telefono: telefono, // Nuevo campo fundamental
+                    telefono: telefono,
                     fecha: fecha,
                     hora: horaSeleccionada,
                     estado: "confirmado",
                     creado: new Date().toISOString()
                 });
-                alert("✅ ¡Turno reservado con éxito en LYON BARBER!");
-                // Redirigir de vuelta al Panel Central
+                alert("✅ ¡Turno reservado con éxito!");
                 window.location.href = "../index.html"; 
             } catch (e) { 
-                console.error("Error al guardar:", e);
-                alert("❌ Hubo un error al guardar tu reserva. Por favor, reintentá."); 
+                alert("❌ Error al guardar. Reintentá."); 
             }
         }
 
-        // Carga inicial al abrir la página
         cargarDisponibilidad();
     </script>
 </body>
