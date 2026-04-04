@@ -1,81 +1,52 @@
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Barbería Hub</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="manifest" href="manifest.json">
+    <meta name="theme-color" content="#EAB308">
+    <style>
+        body { background-color: #0f172a; }
+    </style>
+</head>
+<body class="text-white flex items-center justify-center min-h-screen">
 
-    // TUS CREDENCIALES INTEGRADAS
-    const firebaseConfig = {
-      apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
-      authDomain: "barberia-4b1f9.firebaseapp.com",
-      projectId: "barberia-4b1f9",
-      storageBucket: "barberia-4b1f9.firebasestorage.app",
-      messagingSenderId: "1062067345937",
-      appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
-      measurementId: "G-XTF1P4LKV8"
-    };
-    
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    <div class="max-w-md w-full p-6 text-center">
+        <img src="logom2.jpg" alt="Logo" class="w-32 h-32 mx-auto rounded-full border-4 border-yellow-500 mb-6 shadow-xl">
+        
+        <h1 class="text-3xl font-bold mb-2 italic text-yellow-500 text-yellow-500">BARBERÍA HUB</h1>
+        <p class="text-gray-400 mb-10">Gestión de turnos y reservas</p>
 
-    const slotsContainer = document.getElementById('slots');
-    const inputFecha = document.getElementById('fecha');
-    const horariosBase = ["10:00", "11:00", "12:00", "15:00", "16:00", "17:00", "18:00"];
-    let horaSeleccionada = "";
+        <div class="grid gap-4">
+            <a href="cliente/index.html" class="bg-gray-800 border border-gray-700 p-6 rounded-2xl flex items-center gap-4 hover:bg-gray-700 transition active:scale-95 shadow-lg">
+                <div class="bg-yellow-500 p-3 rounded-xl text-black text-2xl">📅</div>
+                <div class="text-left">
+                    <span class="block font-bold text-lg">Vista Clientes</span>
+                    <span class="text-xs text-gray-500 uppercase font-semibold">Link para compartir</span>
+                </div>
+            </a>
 
-    // Escuchar cuando el cliente cambia la fecha
-    inputFecha.addEventListener('change', cargarDisponibilidad);
+            <a href="barbero/admin.html" class="bg-gray-800 border border-gray-700 p-6 rounded-2xl flex items-center gap-4 hover:bg-gray-700 transition active:scale-95 shadow-lg">
+                <div class="bg-blue-500 p-3 rounded-xl text-white text-2xl">✂️</div>
+                <div class="text-left">
+                    <span class="block font-bold text-lg">Panel Barbero</span>
+                    <span class="text-xs text-gray-500 uppercase font-semibold">Uso interno solamente</span>
+                </div>
+            </a>
+        </div>
 
-    async function cargarDisponibilidad() {
-        slotsContainer.innerHTML = "<p class='col-span-3 text-center'>Cargando horarios...</p>";
-        const fechaElegida = inputFecha.value;
+        <p class="mt-12 text-gray-600 text-sm">© 2026 Barbería Pro System</p>
+    </div>
 
-        // 1. Buscar en Firebase qué turnos ya existen para esa fecha
-        const q = query(collection(db, "turnos"), where("fecha", "==", fechaElegida));
-        const querySnapshot = await getDocs(q);
-        const horasOcupadas = [];
-        querySnapshot.forEach((doc) => horasOcupadas.push(doc.data().hora));
-
-        // 2. Limpiar y dibujar los botones
-        slotsContainer.innerHTML = "";
-        horariosBase.forEach(hora => {
-            const estaOcupado = horasOcupadas.includes(hora);
-            const btn = document.createElement('button');
-            btn.innerText = hora;
-            
-            if (estaOcupado) {
-                btn.className = "py-2 bg-gray-800 text-gray-600 rounded-lg cursor-not-allowed border border-gray-700";
-                btn.disabled = true;
-            } else {
-                btn.className = "py-2 bg-gray-700 rounded-lg hover:bg-yellow-500 hover:text-black transition";
-                btn.onclick = () => {
-                    document.querySelectorAll('#slots button').forEach(b => {
-                        if(!b.disabled) b.className = "py-2 bg-gray-700 rounded-lg hover:bg-yellow-500 hover:text-black transition";
-                    });
-                    btn.className = "py-2 bg-yellow-500 text-black font-bold rounded-lg";
-                    horaSeleccionada = hora;
-                };
-            }
-            slotsContainer.appendChild(btn);
-        });
-    }
-
-    window.confirmarTurno = async () => {
-        const fecha = inputFecha.value;
-        const nombre = document.getElementById('nombreCliente').value;
-
-        if(!fecha || !horaSeleccionada || !nombre) {
-            alert("Completa todos los datos");
-            return;
-        }
-
-        try {
-            await addDoc(collection(db, "turnos"), {
-                cliente: nombre,
-                fecha: fecha,
-                hora: horaSeleccionada,
-                estado: "confirmado"
+    <script>
+        // Registrar Service Worker para que sea instalable
+        if ('serviceWorker' in navigator) {
+            window.addEventListener('load', () => {
+                navigator.serviceWorker.register('sw.js').catch(err => console.log('Error:', err));
             });
-            alert("¡Turno reservado!");
-            location.reload(); // Recargar para limpiar
-        } catch (e) { alert("Error al reservar"); }
-    }
-</script>
+        }
+    </script>
+</body>
+</html>
