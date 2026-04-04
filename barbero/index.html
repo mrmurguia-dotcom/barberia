@@ -1,18 +1,8 @@
-<!DOCTYPE html>
-<html lang="es">
-<head>
-    <meta charset="UTF-8">
-    <script src="https://cdn.tailwindcss.com"></script>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Panel Barbero - Barbería Lyon Barber</title>
-    <style>
-        body { background-color: #0f172a; } /* Color del panel principal */
-    </style>
-</head>
 <body class="text-white min-h-screen font-sans">
     <header class="p-6 flex justify-between items-center max-w-2xl mx-auto border-b border-slate-800">
         <div class="flex items-center gap-3">
             <a href="../index.html" class="bg-slate-800 p-2 rounded-xl hover:bg-slate-700 transition">⬅️</a>
+            <img src="../logom2.jpg" alt="Logo" class="w-12 h-12 rounded-full border border-yellow-500 shadow-lg">
             <div>
                 <h1 class="font-bold text-xl italic text-yellow-500">ADMIN BARBER</h1>
                 <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Gestión Interna</p>
@@ -22,11 +12,11 @@
     </header>
 
     <main class="p-6 max-w-2xl mx-auto">
-        
         <div class="bg-slate-800 border border-slate-700 rounded-3xl p-5 mb-8 shadow-xl">
-            <h3 class="text-yellow-500 font-bold text-sm uppercase mb-4 flex items-center gap-2">
-                🚫 Bloquear Agenda (Día Seleccionado)
+            <h3 class="text-yellow-500 font-bold text-sm uppercase mb-2 flex items-center gap-2">
+                🚫 Gestionar Agenda
             </h3>
+            <p id="msgDomingo" class="text-[10px] text-gray-400 mb-3 hidden uppercase font-bold tracking-tighter">* Domingos bloqueados por defecto. Toca para abrir un turno.</p>
             <div id="gridBloqueo" class="grid grid-cols-4 gap-2">
                 </div>
         </div>
@@ -41,114 +31,101 @@
     </main>
 
     <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-        import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc, addDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-
-        const firebaseConfig = {
-          apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
-          authDomain: "barberia-4b1f9.firebaseapp.com",
-          projectId: "barberia-4b1f9",
-          storageBucket: "barberia-4b1f9.firebasestorage.app",
-          messagingSenderId: "1062067345937",
-          appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
-          measurementId: "G-XTF1P4LKV8"
-        };
-
-        const app = initializeApp(firebaseConfig);
-        const db = getFirestore(app);
-
-        const filtroFecha = document.getElementById('filtroFecha');
-        const listaTurnos = document.getElementById('listaTurnos');
-        const gridBloqueo = document.getElementById('gridBloqueo');
-        const contadorTurnos = document.getElementById('contadorTurnos');
-
-        // Horarios fijos de 10 a 20 hs
-        const horariosBase = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
-
-        // Fecha de hoy por defecto
-        const hoy = new Date().toISOString().split('T')[0];
-        filtroFecha.value = hoy;
-
-        let unsubscribe = null;
+        // ... (Importaciones e inicialización de Firebase iguales) ...
 
         function escucharAgenda() {
             if (unsubscribe) unsubscribe();
 
-            const q = query(collection(db, "turnos"), where("fecha", "==", filtroFecha.value));
+            const fechaSeleccionada = filtroFecha.value;
+            const fechaObj = new Date(fechaSeleccionada + 'T00:00:00');
+            const esDomingo = fechaObj.getDay() === 0;
+
+            // Mostrar mensaje de aviso si es domingo
+            document.getElementById('msgDomingo').classList.toggle('hidden', !esDomingo);
+
+            const q = query(collection(db, "turnos"), where("fecha", "==", fechaSeleccionada));
             
             unsubscribe = onSnapshot(q, (snapshot) => {
                 listaTurnos.innerHTML = "";
                 const ocupados = [];
+                const abiertosDomingo = [];
                 const turnosClientes = [];
 
                 snapshot.forEach((d) => {
                     const data = d.data();
-                    ocupados.push(data.hora);
-                    if (data.cliente !== "BLOQUEADO") {
+                    if (data.cliente === "BLOQUEADO") ocupados.push(data.hora);
+                    else if (data.cliente === "ABIERTO_DOMINGO") abiertosDomingo.push(data.hora);
+                    else {
+                        ocupados.push(data.hora);
                         turnosClientes.push({ id: d.id, ...data });
                     }
                 });
 
-                // 1. Dibujar botones de bloqueo
+                // 1. Dibujar botones de bloqueo/apertura
                 gridBloqueo.innerHTML = "";
                 horariosBase.forEach(hora => {
-                    const estaBloqueado = ocupados.includes(hora);
+                    const estaOcupadoDB = ocupados.includes(hora);
+                    const estaAbiertoDom = abiertosDomingo.includes(hora);
+                    
+                    let estadoFinalBloqueado = false;
+                    if (esDomingo) {
+                        // En domingo: Bloqueado si NO está marcado como "ABIERTO" o si hay un cliente
+                        estadoFinalBloqueado = !estaAbiertoDom || estaOcupadoDB;
+                    } else {
+                        // En semana: Bloqueado si está en la DB como bloqueo o cliente
+                        estadoFinalBloqueado = estaOcupadoDB;
+                    }
+
                     const btn = document.createElement('button');
                     btn.innerText = hora;
-                    btn.className = estaBloqueado 
+                    btn.className = estadoFinalBloqueado 
                         ? "py-2 bg-red-500/20 border border-red-500/50 text-red-500 rounded-xl text-xs font-bold transition"
                         : "py-2 bg-slate-700 border border-slate-600 text-gray-300 rounded-xl text-xs font-bold hover:bg-slate-600 transition";
                     
-                    btn.onclick = () => togglerBloqueo(hora, estaBloqueado, snapshot);
+                    btn.onclick = () => togglerBloqueo(hora, estadoFinalBloqueado, esDomingo, snapshot);
                     gridBloqueo.appendChild(btn);
                 });
 
-                // 2. Dibujar lista de clientes
+                // 2. Dibujar lista con TELÉFONO
                 contadorTurnos.innerText = `${turnosClientes.length} TURNOS`;
-                if (turnosClientes.length === 0) {
-                    listaTurnos.innerHTML = `<p class="text-center py-10 text-gray-500 italic text-sm">Sin turnos de clientes para hoy</p>`;
-                } else {
-                    turnosClientes.sort((a,b) => a.hora.localeCompare(b.hora)).forEach(t => {
-                        const card = document.createElement('div');
-                        card.className = "bg-slate-800 border border-slate-700 p-4 rounded-2xl flex justify-between items-center shadow-lg animate-in fade-in slide-in-from-bottom-2 duration-300";
-                        card.innerHTML = `
-                            <div class="flex items-center gap-4">
-                                <span class="bg-yellow-500 text-black font-black px-2 py-1 rounded-lg text-xs">${t.hora}</span>
+                turnosClientes.sort((a,b) => a.hora.localeCompare(b.hora)).forEach(t => {
+                    const card = document.createElement('div');
+                    card.className = "bg-slate-800 border border-slate-700 p-4 rounded-2xl flex justify-between items-center shadow-lg";
+                    card.innerHTML = `
+                        <div class="flex items-center gap-4">
+                            <span class="bg-yellow-500 text-black font-black px-2 py-1 rounded-lg text-xs">${t.hora}</span>
+                            <div>
                                 <p class="font-bold text-gray-200 capitalize">${t.cliente}</p>
+                                <p class="text-[10px] text-yellow-500/80 font-mono">${t.telefono || 'Sin teléfono'}</p>
                             </div>
-                            <button onclick="borrarRegistro('${t.id}')" class="text-red-400 hover:bg-red-500/10 p-2 rounded-xl transition">🗑️</button>
-                        `;
-                        listaTurnos.appendChild(card);
-                    });
-                }
+                        </div>
+                        <button onclick="borrarRegistro('${t.id}')" class="text-red-400 p-2">🗑️</button>
+                    `;
+                    listaTurnos.appendChild(card);
+                });
             });
         }
 
-        async function togglerBloqueo(hora, estaBloqueado, snapshot) {
-            if (estaBloqueado) {
-                // Si está bloqueado, buscamos el ID para borrarlo
-                let idParaBorrar = "";
-                snapshot.forEach(d => { if(d.data().hora === hora) idParaBorrar = d.id; });
-                if (idParaBorrar) await deleteDoc(doc(db, "turnos", idParaBorrar));
+        async function togglerBloqueo(hora, estaBloqueadoActualmente, esDomingo, snapshot) {
+            let idExistente = "";
+            snapshot.forEach(d => { if(d.data().hora === hora) idExistente = d.id; });
+
+            if (esDomingo) {
+                if (estaBloqueadoActualmente) {
+                    // Si está rojo en domingo, lo "Abrimos"
+                    await addDoc(collection(db, "turnos"), { cliente: "ABIERTO_DOMINGO", fecha: filtroFecha.value, hora: hora });
+                } else {
+                    // Si está gris en domingo, borramos el permiso de apertura
+                    if (idExistente) await deleteDoc(doc(db, "turnos", idExistente));
+                }
             } else {
-                // Bloquear horario
-                await addDoc(collection(db, "turnos"), {
-                    cliente: "BLOQUEADO",
-                    fecha: filtroFecha.value,
-                    hora: hora,
-                    estado: "bloqueado"
-                });
+                if (estaBloqueadoActualmente) {
+                    if (idExistente) await deleteDoc(doc(db, "turnos", idExistente));
+                } else {
+                    await addDoc(collection(db, "turnos"), { cliente: "BLOQUEADO", fecha: filtroFecha.value, hora: hora });
+                }
             }
         }
-
-        window.borrarRegistro = async (id) => {
-            if(confirm("¿Eliminar este turno definitivamente?")) {
-                await deleteDoc(doc(db, "turnos", id));
-            }
-        }
-
-        filtroFecha.addEventListener('change', escucharAgenda);
-        escucharAgenda();
+        // ...
     </script>
 </body>
-</html>
