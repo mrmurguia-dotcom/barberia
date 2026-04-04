@@ -1,81 +1,127 @@
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Panel de Control - Barbería</title>
+</head>
+<body class="bg-gray-100 min-h-screen font-sans text-gray-900">
+    <header class="bg-white shadow p-4 sticky top-0 z-10">
+        <div class="max-w-2xl mx-auto flex justify-between items-center px-2">
+            <div class="flex items-center gap-3">
+                <a href="../index.html" class="bg-gray-100 p-2 rounded-lg hover:bg-gray-200 transition">
+                    ⬅️
+                </a>
+                <div>
+                    <h1 class="font-bold text-lg leading-none">Admin Barber</h1>
+                    <span class="text-xs text-yellow-600 font-bold uppercase tracking-wider">Panel Interno</span>
+                </div>
+            </div>
+            <input type="date" id="filtroFecha" class="border-2 border-gray-300 p-2 rounded-lg focus:ring-2 focus:ring-yellow-500 outline-none cursor-pointer text-sm font-bold">
+        </div>
+    </header>
 
-    // TUS CREDENCIALES INTEGRADAS
-    const firebaseConfig = {
-      apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
-      authDomain: "barberia-4b1f9.firebaseapp.com",
-      projectId: "barberia-4b1f9",
-      storageBucket: "barberia-4b1f9.firebasestorage.app",
-      messagingSenderId: "1062067345937",
-      appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
-      measurementId: "G-XTF1P4LKV8"
-    };
-    
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    <main class="p-6 max-w-2xl mx-auto">
+        <div class="flex justify-between items-center mb-6">
+            <h2 class="text-gray-500 font-bold uppercase text-xs tracking-widest">Turnos del día</h2>
+            <span id="contadorTurnos" class="bg-yellow-500 text-black text-xs font-bold px-2 py-1 rounded-full">0 Turnos</span>
+        </div>
 
-    const slotsContainer = document.getElementById('slots');
-    const inputFecha = document.getElementById('fecha');
-    const horariosBase = ["10:00", "11:00", "12:00", "15:00", "16:00", "17:00", "18:00"];
-    let horaSeleccionada = "";
+        <div id="listaTurnos" class="space-y-4">
+            <p class='text-center text-gray-500 mt-10 italic'>Cargando turnos...</p>
+        </div>
+    </main>
 
-    // Escuchar cuando el cliente cambia la fecha
-    inputFecha.addEventListener('change', cargarDisponibilidad);
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, doc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-    async function cargarDisponibilidad() {
-        slotsContainer.innerHTML = "<p class='col-span-3 text-center'>Cargando horarios...</p>";
-        const fechaElegida = inputFecha.value;
+        const firebaseConfig = {
+          apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
+          authDomain: "barberia-4b1f9.firebaseapp.com",
+          projectId: "barberia-4b1f9",
+          storageBucket: "barberia-4b1f9.firebasestorage.app",
+          messagingSenderId: "1062067345937",
+          appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
+          measurementId: "G-XTF1P4LKV8"
+        };
 
-        // 1. Buscar en Firebase qué turnos ya existen para esa fecha
-        const q = query(collection(db, "turnos"), where("fecha", "==", fechaElegida));
-        const querySnapshot = await getDocs(q);
-        const horasOcupadas = [];
-        querySnapshot.forEach((doc) => horasOcupadas.push(doc.data().hora));
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
 
-        // 2. Limpiar y dibujar los botones
-        slotsContainer.innerHTML = "";
-        horariosBase.forEach(hora => {
-            const estaOcupado = horasOcupadas.includes(hora);
-            const btn = document.createElement('button');
-            btn.innerText = hora;
+        const filtroFecha = document.getElementById('filtroFecha');
+        const listaTurnos = document.getElementById('listaTurnos');
+        const contadorTurnos = document.getElementById('contadorTurnos');
+
+        // Fecha de hoy por defecto
+        const hoy = new Date();
+        const yyyy = hoy.getFullYear();
+        const mm = String(hoy.getMonth() + 1).padStart(2, '0');
+        const dd = String(hoy.getDate()).padStart(2, '0');
+        filtroFecha.value = `${yyyy}-${mm}-${dd}`;
+
+        let unsubscribe = null;
+
+        function escucharTurnos() {
+            if (unsubscribe) unsubscribe();
+
+            const q = query(collection(db, "turnos"), where("fecha", "==", filtroFecha.value));
             
-            if (estaOcupado) {
-                btn.className = "py-2 bg-gray-800 text-gray-600 rounded-lg cursor-not-allowed border border-gray-700";
-                btn.disabled = true;
-            } else {
-                btn.className = "py-2 bg-gray-700 rounded-lg hover:bg-yellow-500 hover:text-black transition";
-                btn.onclick = () => {
-                    document.querySelectorAll('#slots button').forEach(b => {
-                        if(!b.disabled) b.className = "py-2 bg-gray-700 rounded-lg hover:bg-yellow-500 hover:text-black transition";
-                    });
-                    btn.className = "py-2 bg-yellow-500 text-black font-bold rounded-lg";
-                    horaSeleccionada = hora;
-                };
-            }
-            slotsContainer.appendChild(btn);
-        });
-    }
+            unsubscribe = onSnapshot(q, (snapshot) => {
+                listaTurnos.innerHTML = "";
+                contadorTurnos.innerText = `${snapshot.size} Turnos`;
+                
+                if (snapshot.empty) {
+                    listaTurnos.innerHTML = `
+                        <div class="text-center py-20">
+                            <p class="text-4xl mb-4">☕</p>
+                            <p class="text-gray-400 font-medium">No hay turnos para esta fecha.</p>
+                        </div>`;
+                    return;
+                }
 
-    window.confirmarTurno = async () => {
-        const fecha = inputFecha.value;
-        const nombre = document.getElementById('nombreCliente').value;
+                const turnosArray = [];
+                snapshot.forEach((turnoDoc) => {
+                    turnosArray.push({ id: turnoDoc.id, ...turnoDoc.data() });
+                });
 
-        if(!fecha || !horaSeleccionada || !nombre) {
-            alert("Completa todos los datos");
-            return;
+                turnosArray.sort((a, b) => a.hora.localeCompare(b.hora));
+
+                turnosArray.forEach((t) => {
+                    const div = document.createElement('div');
+                    div.className = "bg-white p-5 rounded-2xl shadow-sm border border-gray-100 flex justify-between items-center animate-in fade-in duration-500";
+                    div.innerHTML = `
+                        <div class="flex items-center gap-4">
+                            <div class="bg-yellow-100 text-yellow-700 font-black px-3 py-1 rounded-lg text-sm">
+                                ${t.hora}
+                            </div>
+                            <div>
+                                <p class="font-bold text-gray-800 text-lg capitalize">${t.cliente}</p>
+                                <p class="text-xs text-gray-400 uppercase">Confirmado</p>
+                            </div>
+                        </div>
+                        <button onclick="window.cancelarTurno('${t.id}')" class="p-2 hover:bg-red-50 rounded-full transition group">
+                            <span class="text-red-300 group-hover:text-red-500 text-xl">🗑️</span>
+                        </button>
+                    `;
+                    listaTurnos.appendChild(div);
+                });
+            });
         }
 
-        try {
-            await addDoc(collection(db, "turnos"), {
-                cliente: nombre,
-                fecha: fecha,
-                hora: horaSeleccionada,
-                estado: "confirmado"
-            });
-            alert("¡Turno reservado!");
-            location.reload(); // Recargar para limpiar
-        } catch (e) { alert("Error al reservar"); }
-    }
-</script>
+        window.cancelarTurno = async (id) => {
+            if(confirm("¿Deseas eliminar este turno?")) {
+                try {
+                    await deleteDoc(doc(db, "turnos", id));
+                } catch(error) {
+                    alert("Error al borrar.");
+                }
+            }
+        }
+
+        filtroFecha.addEventListener('change', escucharTurnos);
+        escucharTurnos();
+    </script>
+</body>
+</html>
