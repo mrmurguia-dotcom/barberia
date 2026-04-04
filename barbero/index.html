@@ -1,131 +1,185 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin - Lyon Barber</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { background-color: #0f172a; } /* Fondo oscuro corregido */
+        input[type="date"]::-webkit-calendar-picker-indicator {
+            filter: invert(1); /* Hace que el icono del calendario sea blanco */
+        }
+    </style>
+</head>
 <body class="text-white min-h-screen font-sans">
-    <header class="p-6 flex justify-between items-center max-w-2xl mx-auto border-b border-slate-800">
+
+    <header class="p-4 flex flex-wrap justify-between items-center max-w-2xl mx-auto border-b border-slate-800 sticky top-0 bg-[#0f172a] z-50">
         <div class="flex items-center gap-3">
-            <a href="../index.html" class="bg-slate-800 p-2 rounded-xl hover:bg-slate-700 transition">⬅️</a>
-            <img src="../logom2.jpg" alt="Logo" class="w-12 h-12 rounded-full border border-yellow-500 shadow-lg">
+            <a href="../index.html" class="bg-slate-800 p-2 rounded-xl hover:bg-slate-700 transition active:scale-95">
+                ⬅️
+            </a>
+            <img src="../logom2.jpg" alt="Logo" class="w-12 h-12 rounded-full border-2 border-yellow-500 shadow-lg object-cover">
             <div>
-                <h1 class="font-bold text-xl italic text-yellow-500">ADMIN BARBER</h1>
-                <p class="text-xs text-gray-400 uppercase tracking-widest font-bold">Gestión Interna</p>
+                <h1 class="font-black text-lg italic text-yellow-500 leading-none">ADMIN BARBER</h1>
+                <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Gestión Interna</p>
             </div>
         </div>
-        <input type="date" id="filtroFecha" class="bg-slate-800 border border-slate-700 p-2 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-yellow-500">
+        <input type="date" id="filtroFecha" 
+            class="bg-slate-800 border border-slate-700 p-2 rounded-xl text-sm font-bold outline-none focus:ring-2 focus:ring-yellow-500 mt-2 sm:mt-0">
     </header>
 
     <main class="p-6 max-w-2xl mx-auto">
-        <div class="bg-slate-800 border border-slate-700 rounded-3xl p-5 mb-8 shadow-xl">
-            <h3 class="text-yellow-500 font-bold text-sm uppercase mb-2 flex items-center gap-2">
-                🚫 Gestionar Agenda
+        <div class="bg-slate-800/50 border border-slate-700/50 rounded-3xl p-5 mb-8 shadow-2xl backdrop-blur-sm">
+            <h3 class="text-yellow-500 font-bold text-xs uppercase mb-3 flex items-center gap-2">
+                🚫 Gestionar Agenda (Día Seleccionado)
             </h3>
-            <p id="msgDomingo" class="text-[10px] text-gray-400 mb-3 hidden uppercase font-bold tracking-tighter">* Domingos bloqueados por defecto. Toca para abrir un turno.</p>
+            <p id="msgDomingo" class="text-[10px] text-gray-400 mb-3 hidden uppercase font-bold tracking-tight bg-slate-900/50 p-2 rounded-lg border border-slate-700">
+                * Domingos bloqueados por defecto. Toca una hora para abrir el turno.
+            </p>
             <div id="gridBloqueo" class="grid grid-cols-4 gap-2">
                 </div>
         </div>
 
         <div class="flex justify-between items-center mb-6">
-            <h2 class="text-gray-400 font-bold uppercase text-xs tracking-widest italic">Turnos de Clientes</h2>
+            <h2 class="text-gray-400 font-bold uppercase text-[10px] tracking-widest italic">Turnos de Clientes</h2>
             <span id="contadorTurnos" class="bg-yellow-500 text-black text-xs font-black px-3 py-1 rounded-full shadow-lg">0 TURNOS</span>
         </div>
 
-        <div id="listaTurnos" class="space-y-3">
+        <div id="listaTurnos" class="space-y-3 pb-10">
             </div>
     </main>
 
     <script type="module">
-        // ... (Importaciones e inicialización de Firebase iguales) ...
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, query, where, onSnapshot, addDoc, deleteDoc, doc } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+        // CONFIGURACIÓN FIREBASE
+        const firebaseConfig = {
+          apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
+          authDomain: "barberia-4b1f9.firebaseapp.com",
+          projectId: "barberia-4b1f9",
+          storageBucket: "barberia-4b1f9.firebasestorage.app",
+          messagingSenderId: "1062067345937",
+          appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
+          measurementId: "G-XTF1P4LKV8"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const gridBloqueo = document.getElementById('gridBloqueo');
+        const listaTurnos = document.getElementById('listaTurnos');
+        const filtroFecha = document.getElementById('filtroFecha');
+        const contadorTurnos = document.getElementById('contadorTurnos');
+
+        const horariosBase = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
+        let unsubscribe = null;
+
+        // Fecha inicial (hoy)
+        filtroFecha.value = new Date().toISOString().split('T')[0];
+        filtroFecha.addEventListener('change', escucharAgenda);
 
         function escucharAgenda() {
             if (unsubscribe) unsubscribe();
 
-            const fechaSeleccionada = filtroFecha.value;
-            const fechaObj = new Date(fechaSeleccionada + 'T00:00:00');
+            const fechaSel = filtroFecha.value;
+            const fechaObj = new Date(fechaSel + 'T00:00:00');
             const esDomingo = fechaObj.getDay() === 0;
 
-            // Mostrar mensaje de aviso si es domingo
             document.getElementById('msgDomingo').classList.toggle('hidden', !esDomingo);
 
-            const q = query(collection(db, "turnos"), where("fecha", "==", fechaSeleccionada));
+            const q = query(collection(db, "turnos"), where("fecha", "==", fechaSel));
             
             unsubscribe = onSnapshot(q, (snapshot) => {
                 listaTurnos.innerHTML = "";
                 const ocupados = [];
-                const abiertosDomingo = [];
+                const abiertosDom = [];
                 const turnosClientes = [];
+                const idsMap = {}; // Para saber qué ID borrar al tocar botones
 
                 snapshot.forEach((d) => {
                     const data = d.data();
+                    idsMap[data.hora] = d.id;
                     if (data.cliente === "BLOQUEADO") ocupados.push(data.hora);
-                    else if (data.cliente === "ABIERTO_DOMINGO") abiertosDomingo.push(data.hora);
+                    else if (data.cliente === "ABIERTO_DOMINGO") abiertosDom.push(data.hora);
                     else {
                         ocupados.push(data.hora);
                         turnosClientes.push({ id: d.id, ...data });
                     }
                 });
 
-                // 1. Dibujar botones de bloqueo/apertura
+                // 1. Dibujar botones de la agenda
                 gridBloqueo.innerHTML = "";
                 horariosBase.forEach(hora => {
-                    const estaOcupadoDB = ocupados.includes(hora);
-                    const estaAbiertoDom = abiertosDomingo.includes(hora);
+                    const estaOcupado = ocupados.includes(hora);
+                    const estaAbiertoDom = abiertosDom.includes(hora);
                     
-                    let estadoFinalBloqueado = false;
-                    if (esDomingo) {
-                        // En domingo: Bloqueado si NO está marcado como "ABIERTO" o si hay un cliente
-                        estadoFinalBloqueado = !estaAbiertoDom || estaOcupadoDB;
-                    } else {
-                        // En semana: Bloqueado si está en la DB como bloqueo o cliente
-                        estadoFinalBloqueado = estaOcupadoDB;
-                    }
+                    let bloqueado = esDomingo ? !estaAbiertoDom : estaOcupado;
 
                     const btn = document.createElement('button');
                     btn.innerText = hora;
-                    btn.className = estadoFinalBloqueado 
-                        ? "py-2 bg-red-500/20 border border-red-500/50 text-red-500 rounded-xl text-xs font-bold transition"
-                        : "py-2 bg-slate-700 border border-slate-600 text-gray-300 rounded-xl text-xs font-bold hover:bg-slate-600 transition";
+                    btn.className = bloqueado 
+                        ? "py-2 bg-red-500/20 border border-red-500/40 text-red-400 rounded-xl text-xs font-bold transition active:scale-90"
+                        : "py-2 bg-slate-700/50 border border-slate-600 text-gray-300 rounded-xl text-xs font-bold hover:bg-slate-600 transition active:scale-90";
                     
-                    btn.onclick = () => togglerBloqueo(hora, estadoFinalBloqueado, esDomingo, snapshot);
+                    btn.onclick = () => togglerBloqueo(hora, bloqueado, esDomingo, idsMap[hora]);
                     gridBloqueo.appendChild(btn);
                 });
 
-                // 2. Dibujar lista con TELÉFONO
+                // 2. Dibujar Lista de Clientes
                 contadorTurnos.innerText = `${turnosClientes.length} TURNOS`;
+                if(turnosClientes.length === 0) {
+                    listaTurnos.innerHTML = "<p class='text-center text-gray-500 text-xs py-10 italic'>No hay turnos para este día</p>";
+                }
+
                 turnosClientes.sort((a,b) => a.hora.localeCompare(b.hora)).forEach(t => {
                     const card = document.createElement('div');
-                    card.className = "bg-slate-800 border border-slate-700 p-4 rounded-2xl flex justify-between items-center shadow-lg";
+                    card.className = "bg-slate-800 border border-slate-700 p-4 rounded-2xl flex justify-between items-center shadow-lg border-l-4 border-l-yellow-500";
                     card.innerHTML = `
                         <div class="flex items-center gap-4">
-                            <span class="bg-yellow-500 text-black font-black px-2 py-1 rounded-lg text-xs">${t.hora}</span>
+                            <span class="bg-yellow-500 text-black font-black px-2 py-1 rounded-lg text-[10px] shadow-sm">${t.hora}</span>
                             <div>
-                                <p class="font-bold text-gray-200 capitalize">${t.cliente}</p>
-                                <p class="text-[10px] text-yellow-500/80 font-mono">${t.telefono || 'Sin teléfono'}</p>
+                                <p class="font-bold text-gray-100 capitalize text-sm">${t.cliente}</p>
+                                <p class="text-[10px] text-yellow-500/80 font-mono tracking-tighter">${t.telefono || 'Sin teléfono'}</p>
                             </div>
                         </div>
-                        <button onclick="borrarRegistro('${t.id}')" class="text-red-400 p-2">🗑️</button>
+                        <button onclick="borrarTurno('${t.id}')" class="bg-red-500/10 hover:bg-red-500/20 p-2 rounded-xl transition text-lg">🗑️</button>
                     `;
                     listaTurnos.appendChild(card);
                 });
             });
         }
 
-        async function togglerBloqueo(hora, estaBloqueadoActualmente, esDomingo, snapshot) {
-            let idExistente = "";
-            snapshot.forEach(d => { if(d.data().hora === hora) idExistente = d.id; });
+        async function togglerBloqueo(hora, estaBloqueado, esDomingo, idExistente) {
+            try {
+                if (esDomingo) {
+                    if (estaBloqueado) {
+                        // Abrir turno en domingo
+                        await addDoc(collection(db, "turnos"), { cliente: "ABIERTO_DOMINGO", fecha: filtroFecha.value, hora: hora });
+                    } else {
+                        // Volver a cerrar (borrar permiso de apertura)
+                        if (idExistente) await deleteDoc(doc(db, "turnos", idExistente));
+                    }
+                } else {
+                    if (estaBloqueado) {
+                        // Desbloquear (borrar registro)
+                        if (idExistente) await deleteDoc(doc(db, "turnos", idExistente));
+                    } else {
+                        // Bloquear manualmente
+                        await addDoc(collection(db, "turnos"), { cliente: "BLOQUEADO", fecha: filtroFecha.value, hora: hora });
+                    }
+                }
+            } catch (e) { alert("Error al actualizar agenda"); }
+        }
 
-            if (esDomingo) {
-                if (estaBloqueadoActualmente) {
-                    // Si está rojo en domingo, lo "Abrimos"
-                    await addDoc(collection(db, "turnos"), { cliente: "ABIERTO_DOMINGO", fecha: filtroFecha.value, hora: hora });
-                } else {
-                    // Si está gris en domingo, borramos el permiso de apertura
-                    if (idExistente) await deleteDoc(doc(db, "turnos", idExistente));
-                }
-            } else {
-                if (estaBloqueadoActualmente) {
-                    if (idExistente) await deleteDoc(doc(db, "turnos", idExistente));
-                } else {
-                    await addDoc(collection(db, "turnos"), { cliente: "BLOQUEADO", fecha: filtroFecha.value, hora: hora });
-                }
+        window.borrarTurno = async (id) => {
+            if(confirm("¿Seguro que querés cancelar este turno?")) {
+                await deleteDoc(doc(db, "turnos", id));
             }
         }
-        // ...
+
+        escucharAgenda();
     </script>
 </body>
+</html>
