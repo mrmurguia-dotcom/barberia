@@ -1,95 +1,137 @@
-<script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-    import { getFirestore, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reservar Turno - Barbería</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-900 text-white min-h-screen font-sans">
 
-    const firebaseConfig = {
-      apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
-      authDomain: "barberia-4b1f9.firebaseapp.com",
-      projectId: "barberia-4b1f9",
-      storageBucket: "barberia-4b1f9.firebasestorage.app",
-      messagingSenderId: "1062067345937",
-      appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
-      measurementId: "G-XTF1P4LKV8"
-    };
-    
-    const app = initializeApp(firebaseConfig);
-    const db = getFirestore(app);
+    <div class="p-4 flex items-center gap-4">
+        <a href="../index.html" class="text-2xl">⬅️</a>
+        <h1 class="text-xl font-bold text-yellow-500 italic">RESERVAR TURNO</h1>
+    </div>
 
-    const slotsContainer = document.getElementById('slots');
-    const inputFecha = document.getElementById('fecha');
-    const horariosBase = ["10:00", "11:00", "12:00", "15:00", "16:00", "17:00", "18:00"];
-    let horaSeleccionada = "";
+    <main class="max-w-md mx-auto p-6">
+        <div class="mb-8 space-y-4">
+            <label class="block">
+                <span class="text-gray-400 text-sm uppercase font-bold">Tu Nombre</span>
+                <input type="text" id="nombreCliente" placeholder="Ej: Juan Pérez" 
+                    class="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl mt-1 focus:ring-2 focus:ring-yellow-500 outline-none">
+            </label>
 
-    // Ponemos la fecha de hoy por defecto al cargar
-    const hoy = new Date().toISOString().split('T')[0];
-    inputFecha.value = hoy;
+            <label class="block">
+                <span class="text-gray-400 text-sm uppercase font-bold">Seleccionar Fecha</span>
+                <input type="date" id="fecha" 
+                    class="w-full bg-slate-800 border border-slate-700 p-3 rounded-xl mt-1 focus:ring-2 focus:ring-yellow-500 outline-none text-white">
+            </label>
+        </div>
 
-    // Escuchar cuando el cliente cambia la fecha
-    inputFecha.addEventListener('change', cargarDisponibilidad);
+        <div class="mb-8">
+            <span class="text-gray-400 text-sm uppercase font-bold block mb-3">Horarios Disponibles</span>
+            <div id="slots" class="grid grid-cols-3 gap-3">
+                <p class="text-gray-500 text-sm italic">Cargando...</p>
+            </div>
+        </div>
 
-    async function cargarDisponibilidad() {
-        slotsContainer.innerHTML = "<p class='col-span-3 text-center text-sm text-gray-400'>Verificando...</p>";
-        const fechaElegida = inputFecha.value;
+        <button onclick="confirmarTurno()" 
+            class="w-full bg-yellow-500 text-black font-black py-4 rounded-2xl shadow-lg hover:bg-yellow-400 transition active:scale-95">
+            CONFIRMAR TURNO
+        </button>
+    </main>
 
-        try {
-            const q = query(collection(db, "turnos"), where("fecha", "==", fechaElegida));
-            const querySnapshot = await getDocs(q);
-            const horasOcupadas = [];
-            querySnapshot.forEach((doc) => horasOcupadas.push(doc.data().hora));
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+        import { getFirestore, collection, addDoc, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-            slotsContainer.innerHTML = "";
-            horariosBase.forEach(hora => {
-                const estaOcupado = horasOcupadas.includes(hora);
-                const btn = document.createElement('button');
-                btn.innerText = hora;
-                
-                if (estaOcupado) {
-                    btn.className = "py-2 bg-gray-800 text-gray-600 rounded-lg cursor-not-allowed border border-gray-700 text-sm";
-                    btn.disabled = true;
-                } else {
-                    btn.className = "py-2 bg-gray-700 rounded-lg hover:bg-yellow-500 hover:text-black transition text-sm font-medium";
-                    btn.onclick = (e) => {
-                        e.preventDefault(); // Evita comportamientos extraños en móviles
-                        document.querySelectorAll('#slots button').forEach(b => {
-                            if(!b.disabled) b.className = "py-2 bg-gray-700 rounded-lg hover:bg-yellow-500 hover:text-black transition text-sm font-medium";
-                        });
-                        btn.className = "py-2 bg-yellow-500 text-black font-bold rounded-lg text-sm";
-                        horaSeleccionada = hora;
-                    };
-                }
-                slotsContainer.appendChild(btn);
-            });
-        } catch (error) {
-            console.error("Error:", error);
-            slotsContainer.innerHTML = "<p class='col-span-3 text-red-500 text-center text-xs'>Error al cargar horarios</p>";
+        const firebaseConfig = {
+          apiKey: "AIzaSyCLBGU0u6QYdAweKqSia7yFMSvS9F4QHBM",
+          authDomain: "barberia-4b1f9.firebaseapp.com",
+          projectId: "barberia-4b1f9",
+          storageBucket: "barberia-4b1f9.firebasestorage.app",
+          messagingSenderId: "1062067345937",
+          appId: "1:1062067345937:web:fdd305a34a21c67837afb0",
+          measurementId: "G-XTF1P4LKV8"
+        };
+        
+        const app = initializeApp(firebaseConfig);
+        const db = getFirestore(app);
+
+        const slotsContainer = document.getElementById('slots');
+        const inputFecha = document.getElementById('fecha');
+        const horariosBase = ["10:00", "11:00", "12:00", "15:00", "16:00", "17:00", "18:00"];
+        let horaSeleccionada = "";
+
+        // Fecha de hoy por defecto
+        const hoy = new Date().toISOString().split('T')[0];
+        inputFecha.value = hoy;
+
+        inputFecha.addEventListener('change', cargarDisponibilidad);
+
+        async function cargarDisponibilidad() {
+            slotsContainer.innerHTML = "<p class='col-span-3 text-center text-sm text-gray-400'>Verificando...</p>";
+            const fechaElegida = inputFecha.value;
+
+            try {
+                const q = query(collection(db, "turnos"), where("fecha", "==", fechaElegida));
+                const querySnapshot = await getDocs(q);
+                const horasOcupadas = [];
+                querySnapshot.forEach((doc) => horasOcupadas.push(doc.data().hora));
+
+                slotsContainer.innerHTML = "";
+                horariosBase.forEach(hora => {
+                    const estaOcupado = horasOcupadas.includes(hora);
+                    const btn = document.createElement('button');
+                    btn.innerText = hora;
+                    
+                    if (estaOcupado) {
+                        btn.className = "py-2 bg-slate-800 text-slate-600 rounded-lg cursor-not-allowed border border-slate-700 text-sm";
+                        btn.disabled = true;
+                    } else {
+                        btn.className = "py-2 bg-slate-700 rounded-lg hover:bg-yellow-500 hover:text-black transition text-sm font-medium";
+                        btn.onclick = (e) => {
+                            e.preventDefault();
+                            document.querySelectorAll('#slots button').forEach(b => {
+                                if(!b.disabled) b.className = "py-2 bg-slate-700 rounded-lg hover:bg-yellow-500 hover:text-black transition text-sm font-medium";
+                            });
+                            btn.className = "py-2 bg-yellow-500 text-black font-bold rounded-lg text-sm";
+                            horaSeleccionada = hora;
+                        };
+                    }
+                    slotsContainer.appendChild(btn);
+                });
+            } catch (error) {
+                console.error("Error:", error);
+                slotsContainer.innerHTML = "<p class='col-span-3 text-red-500 text-center text-xs'>Error al cargar horarios</p>";
+            }
         }
-    }
 
-    window.confirmarTurno = async () => {
-        const fecha = inputFecha.value;
-        const nombre = document.getElementById('nombreCliente').value;
+        window.confirmarTurno = async () => {
+            const fecha = inputFecha.value;
+            const nombre = document.getElementById('nombreCliente').value;
 
-        if(!fecha || !horaSeleccionada || !nombre) {
-            alert("⚠️ Por favor, completá tu nombre y elegí un horario.");
-            return;
+            if(!fecha || !horaSeleccionada || !nombre) {
+                alert("⚠️ Por favor, completá tu nombre y elegí un horario.");
+                return;
+            }
+
+            try {
+                await addDoc(collection(db, "turnos"), {
+                    cliente: nombre,
+                    fecha: fecha,
+                    hora: horaSeleccionada,
+                    estado: "confirmado",
+                    creado: new Date().toISOString()
+                });
+                alert("✅ ¡Turno reservado con éxito!");
+                window.location.href = "../index.html"; 
+            } catch (e) { 
+                alert("❌ Hubo un error al guardar. Reintentá."); 
+            }
         }
 
-        try {
-            await addDoc(collection(db, "turnos"), {
-                cliente: nombre,
-                fecha: fecha,
-                hora: horaSeleccionada,
-                estado: "confirmado",
-                creado: new Date().toISOString()
-            });
-            alert("✅ ¡Turno reservado con éxito!");
-            // En vez de recargar, volvemos al Panel Central
-            window.location.href = "../index.html"; 
-        } catch (e) { 
-            alert("❌ Hubo un error al guardar. Reintentá."); 
-        }
-    }
-
-    // Ejecutar al cargar la página por primera vez
-    cargarDisponibilidad();
-</script>
+        cargarDisponibilidad();
+    </script>
+</body>
+</html>
