@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Admin - Lyon Barber</title>
+    <title>Turnos - Lyon Barber</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         body { background-color: #0f172a; } /* Fondo oscuro corregido */
@@ -21,7 +21,7 @@
             </a>
             <img src="../logom2.jpg" alt="Logo" class="w-12 h-12 rounded-full border-2 border-yellow-500 shadow-lg object-cover">
             <div>
-                <h1 class="font-black text-lg italic text-yellow-500 leading-none">ADMIN BARBER</h1>
+                <h1 class="font-black text-lg italic text-yellow-500 leading-none">TURNOS BARBER</h1>
                 <p class="text-[10px] text-gray-400 uppercase tracking-widest font-bold">Gestión Interna</p>
             </div>
         </div>
@@ -73,7 +73,7 @@
         const filtroFecha = document.getElementById('filtroFecha');
         const contadorTurnos = document.getElementById('contadorTurnos');
 
-        const horariosBase = ["10:00", "11:00", "12:00", "13:00", "14:00", "15:00", "16:00", "17:00", "18:00", "19:00", "20:00"];
+        const horariosBase = ["10:00", "10:30", "11:00", "11:30", "12:00", "12:30", "13:00", "13:30", "14:00", "14:30", "15:00", "15:30", "16:00", "16:30", "17:00", "17:30", "18:00", "18:30", "19:00", "19:30"];
         let unsubscribe = null;
 
         // Fecha inicial (hoy)
